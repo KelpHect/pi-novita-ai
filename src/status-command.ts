@@ -7,13 +7,13 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
   API_KEY_ENV,
   KEY_MANAGEMENT_URL,
+  PROBE_MODEL,
   PROVIDER_ID,
   PROVIDER_LABEL,
 } from "./config.js";
 import { probeChatCompletion } from "./novita-api.js";
 
 const AUTH_FILE = join(homedir(), ".pi", "agent", "auth.json");
-const PROBE_MODEL = "tencent/hy3";
 
 async function hasStoredLogin(): Promise<boolean> {
   try {

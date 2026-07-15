@@ -11,23 +11,25 @@ custom streaming code required.
 ## Features
 
 - **`/login` integration** — "Novita AI" appears in Pi's `/login` menu; paste
-  your API key, it's verified against `/v1/models`, and stored in `auth.json`
-- **Dynamic model discovery** — fetches `/v1/models` at startup and merges with
-  a curated metadata map for all Novita recommended models
-- **Reasoning / extended thinking** — per-model-family `thinkingFormat`:
-  - `qwen` format (`enable_thinking`) for GLM, Kimi, Qwen models
-  - `deepseek` format (`thinking: { type }`) for DeepSeek models
-  - Standard `reasoning_effort` for Hy3, MiniMax, and others
-- **Vision / multimodal** — VLM models (Kimi K2.5, Qwen 3.5, Gemma 4) registered
-  with `input: ["text", "image"]`
-- **Function calling / tool use** — works automatically via OpenAI-compatible API
-- **Interleaved thinking** — `requiresReasoningContentOnAssistantMessages` set
-  so reasoning chains are preserved across tool calls
-- **Prompt caching** — `cacheRead`/`cacheWrite` cost fields tracked
-- **Context overflow recovery** — normalizes Novita's overflow errors so Pi can
-  auto-compact and retry
-- **`/novita` command** — shows auth status (env var vs `/login` vs missing)
-  and how many models are registered; first stop when debugging a 403
+  your API key, it's validated with a live probe, and stored in `auth.json`
+- **Full live model catalog** — every chat model from `/v1/models`
+  (no auth required), with names, context windows, max output tokens,
+  reasoning and vision capabilities taken directly from the API
+- **Accurate cost tracking** — real per-model USD pricing including cache-read
+  rates and Novita's tiered billing (mapped to Pi's native cost tiers)
+- **Reasoning / extended thinking** — `enable_thinking` toggle (the control
+  Novita documents), with reasoning content echoed across tool calls per
+  Novita's interleaved-thinking requirements
+- **Vision** — models with `image` in `input_modalities` accept images
+- **Function calling & structured outputs** — via the OpenAI-compatible API
+- **Prompt caching** — implicit on Novita; cache-read costs tracked
+- **Decoded errors** — Novita's `{code, reason, message}` bodies become
+  actionable messages ("NOT_ENOUGH_BALANCE → top up at novita.ai/billing"),
+  and context-overflow errors are normalized so Pi can auto-compact and retry
+- **`/novita [model]` command** — shows the active auth path and runs a live
+  1-token probe that reports Novita's real error reason
+- **Offline resilience** — if `/v1/models` is unreachable, a bundled snapshot
+  of Novita's recommended models registers instead
 
 ## Install
 
@@ -96,36 +98,27 @@ is configured, Novita returns `HTTP 403 INVALID_API_KEY` for every request,
 regardless of which model you pick. Run `/novita` at any time to see which
 auth path is active.
 
-## Curated models
+## Models
 
-All recommended models from [Novita's docs](https://novita.ai/docs/guides/llm-recommended)
-are curated with accurate metadata:
+The full chat-model catalog (~139 models) is fetched live from
+`GET /openai/v1/models` at startup — including
+[Novita's recommended models](https://novita.ai/docs/guides/llm-recommended)
+such as `tencent/hy3` (free), `moonshotai/kimi-k2.7-code`, `zai-org/glm-5.2`,
+`deepseek/deepseek-v4-pro`, and `minimax/minimax-m3`. Display names,
+context windows, max output tokens, capabilities, and USD pricing all come
+from the API, so newly launched models and price changes appear without an
+extension update.
 
-| Model ID | Reasoning | Vision | Context | Thinking format |
-|----------|-----------|--------|---------|-----------------|
-| `tencent/hy3` | yes | — | 256K | `reasoning_effort` |
-| `moonshotai/kimi-k2.7-code` | yes | — | 262K | `qwen` (`enable_thinking`) |
-| `zai-org/glm-5.2` | yes | — | 1M | `qwen` (`enable_thinking`) |
-| `deepseek/deepseek-v4-pro` | yes | — | 1M | `deepseek` |
-| `deepseek/deepseek-v3.2` | yes | — | 160K | `deepseek` |
-| `qwen/qwen3.5-397b-a17b` | yes | yes | 262K | `qwen` (`enable_thinking`) |
-| `minimax/minimax-m3` | yes | — | 1M | `reasoning_effort` |
-| `deepseek/deepseek-v4-flash` | yes | — | 1M | `deepseek` |
-| `moonshotai/kimi-k2.5` | yes | yes | 262K | `qwen` (`enable_thinking`) |
-| `google/gemma-4-31b-it` | — | yes | 262K | — |
-| `inclusionai/ling-2.6-flash` | — | — | 262K | — |
-| `meta-llama/llama-3.1-8b-instruct` | — | — | 128K | — |
-| `google/gemma-4-26b-a4b-it` | — | — | 262K | — |
+## Known limitations
 
-Pricing is set to $0 where models are in a free promotional tier or where exact
-pricing is unconfirmed. Verify actual pricing at
-<https://novita.ai/pricing>.
-
-### `tencent/hy3`
-
-Flagship model: 295B/21B active MoE, native 256K context, three reasoning
-modes. Registered with `reasoning: true`, `thinkingLevelMap` supporting
-`low`/`medium`/`high`/`max` effort levels, and `maxTokens: 262144`.
+- Novita documents `enable_thinking` as the only thinking control, so Pi's
+  thinking-level selector maps to on/off for Novita models (no effort
+  granularity on the wire).
+- Novita's structured `reasoning_details` format (`reasoning_split: true`) is
+  not requested; Pi consumes the default `reasoning_content` stream, which
+  Novita states requires no request changes.
+- Audio and video input modalities (a handful of Qwen omni models) are not
+  supported by Pi and are registered as text/image only.
 
 ## License
 
