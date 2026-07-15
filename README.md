@@ -11,7 +11,7 @@ custom streaming code required.
 ## Features
 
 - **`/login` integration** — "Novita AI" appears in Pi's `/login` menu; paste
-  your API key and it's stored in `auth.json`
+  your API key, it's verified against `/v1/models`, and stored in `auth.json`
 - **Dynamic model discovery** — fetches `/v1/models` at startup and merges with
   a curated metadata map for all Novita recommended models
 - **Reasoning / extended thinking** — per-model-family `thinkingFormat`:
@@ -26,6 +26,8 @@ custom streaming code required.
 - **Prompt caching** — `cacheRead`/`cacheWrite` cost fields tracked
 - **Context overflow recovery** — normalizes Novita's overflow errors so Pi can
   auto-compact and retry
+- **`/novita` command** — shows auth status (env var vs `/login` vs missing)
+  and how many models are registered; first stop when debugging a 403
 
 ## Install
 
@@ -78,7 +80,8 @@ git clone https://github.com/KelpHect/pi-novita-ai.git ~/.pi/agent/extensions/pi
 
 1. Start Pi.
 2. Run `/login` and select **Novita AI** — paste your Novita API key when
-   prompted. The key is stored in `~/.pi/agent/auth.json` under `novita`.
+   prompted. The key is verified against `/v1/models` and stored in
+   `~/.pi/agent/auth.json` under `novita`.
    (Get a key from <https://novita.ai/settings/key-management>.)
 3. Run `/model` and pick a Novita model, e.g. `novita/tencent-hy3`.
 
@@ -88,22 +91,10 @@ Alternatively, you can set the key via environment variable instead of `/login`:
 export NOVITA_API_KEY=nva_xxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
-Auth file credentials (`/login`) take priority over the environment variable.
-
-## How it works
-
-- Registers a provider named `novita` with `name: "Novita AI"` (shows in
-  `/login`), `baseUrl: https://api.novita.ai/openai`, `authHeader: true`
-  (adds `Authorization: Bearer` to every request).
-- Uses `api: "openai-completions"` (Novita is OpenAI-compatible).
-- On startup, fetches `https://api.novita.ai/openai/v1/models` and registers
-  every returned model. Models in the curated `KNOWN_MODELS` map get full
-  metadata (reasoning, vision, context window, thinkingFormat, compat);
-  discovered models without a curated entry get inferred defaults.
-- If the model list can't be fetched (no key / network error), falls back to
-  the curated set so the extension still loads.
-- A `message_end` handler normalizes Novita's context-overflow errors to
-  `context_length_exceeded` so Pi can auto-compact and retry.
+`/login` credentials take priority over the environment variable. If neither
+is configured, Novita returns `HTTP 403 INVALID_API_KEY` for every request,
+regardless of which model you pick. Run `/novita` at any time to see which
+auth path is active.
 
 ## Curated models
 
