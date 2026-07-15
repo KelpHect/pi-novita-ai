@@ -24,6 +24,9 @@
  *     - `qwen` format (top-level `enable_thinking`) for GLM, Kimi, Qwen
  *     - `deepseek` format (`thinking: { type: enabled|disabled }`) for DeepSeek
  * - Interleaved thinking (reasoning_content / reasoning_details between tool calls)
+ *   Note: Novita's `reasoning_split: true` body parameter cannot be sent via
+ *   Pi's openai-completions implementation (the extension API has no way to
+ *   inject arbitrary body params), but Novita's docs state it's not required.
  * - Prompt caching (cacheRead/cacheWrite cost tracking)
  *
  * # Model discovery
@@ -178,17 +181,6 @@ const THINKING_CAN_DISABLE: ThinkingLevelMap = {
   max: null,
 };
 
-// Models where thinking cannot be disabled (always-on reasoning).
-const THINKING_ALWAYS_ON: ThinkingLevelMap = {
-  off: null,
-  minimal: null,
-  low: "low",
-  medium: "medium",
-  high: "high",
-  xhigh: null,
-  max: null,
-};
-
 // Models that support extended reasoning including max effort.
 const THINKING_FULL_RANGE: ThinkingLevelMap = {
   off: "off",
@@ -203,11 +195,16 @@ const THINKING_FULL_RANGE: ThinkingLevelMap = {
 // ---------------------------------------------------------------------------
 // Curated model metadata
 //
-// Source: Novita "Recommended Models" docs (https://novita.ai/docs/guides/llm-recommended)
-// and individual model detail pages. Context windows are taken from the
-// recommended models table. Pricing should be verified at
-// https://novita.ai/pricing — values here are set to $0 where the model is in
-// a free promotional tier or where exact pricing is not confirmed.
+// Source: Novita "Recommended Models" docs (https://novita.ai/docs/guides/llm-recommended),
+// individual model detail pages, function calling / vision / structured outputs /
+// interleaved thinking how-to docs, and the migration table. Context windows are
+// from the recommended models table.
+//
+// PRICING: All costs are set to $0. Novita bills per token with rates that vary
+// by model (see https://novita.ai/pricing). Cached read tokens are billed at
+// ~1/10th of the input price (per Novita FAQ). To get accurate cost tracking in
+// Pi, replace the $0 values with actual rates from the pricing page. The $0
+// values are safe — Pi will just not display cost estimates.
 // ---------------------------------------------------------------------------
 
 const KNOWN_MODELS: Record<string, CuratedModel> = {
@@ -380,6 +377,130 @@ const KNOWN_MODELS: Record<string, CuratedModel> = {
     maxTokens: 8192,
     compat: BASE_COMPAT,
   },
+
+  // =========================================================================
+  // Additional models from Novita docs (function calling, vision, structured
+  // outputs, interleaved thinking examples). These are older models that appear
+  // in Novita's how-to docs. They are curated here so their metadata is correct
+  // even if /v1/models discovery returns them and the inference heuristics
+  // would misclassify them (e.g. qwen2.5-vl contains "qwen" but is not a
+  // reasoning model).
+  // =========================================================================
+
+  // From function calling docs. Older DeepSeek model (note underscore in id).
+  "deepseek/deepseek_v3": {
+    name: "DeepSeek V3",
+    reasoning: false,
+    input: ["text"],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 163840,
+    maxTokens: 8192,
+    compat: BASE_COMPAT,
+  },
+
+  // From structured outputs docs. Not a reasoning model.
+  "mistralai/mistral-7b-instruct": {
+    name: "Mistral 7B Instruct",
+    reasoning: false,
+    input: ["text"],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 32768,
+    maxTokens: 4096,
+    compat: BASE_COMPAT,
+  },
+
+  // From vision docs. VLM but NOT a reasoning model — would be misclassified
+  // by the "qwen" heuristic if not curated here.
+  "qwen/qwen2.5-vl-72b-instruct": {
+    name: "Qwen 2.5 VL 72B (Vision)",
+    reasoning: false,
+    input: ["text", "image"],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 131072,
+    maxTokens: 8192,
+    compat: BASE_COMPAT,
+  },
+
+  // From interleaved thinking docs. Reasoning model.
+  "minimax/minimax-m2": {
+    name: "MiniMax M2",
+    reasoning: true,
+    input: ["text"],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 1048576,
+    maxTokens: 65536,
+    thinkingLevelMap: THINKING_CAN_DISABLE,
+    compat: STANDARD_REASONING_COMPAT,
+  },
+
+  // =========================================================================
+  // Legacy models from Novita's migration table. Curated so that if they
+  // appear in /v1/models, users get correct metadata. Novita recommends
+  // migrating away from these.
+  // =========================================================================
+
+  "deepseek/deepseek-r1-0528": {
+    name: "DeepSeek R1 (0528) — legacy",
+    reasoning: true,
+    input: ["text"],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 163840,
+    maxTokens: 32768,
+    thinkingLevelMap: THINKING_CAN_DISABLE,
+    compat: DEEPSEEK_THINKING_COMPAT,
+  },
+
+  "zai-org/glm-4.5": {
+    name: "GLM 4.5 (Zhipu) — legacy",
+    reasoning: true,
+    input: ["text"],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 131072,
+    maxTokens: 8192,
+    thinkingLevelMap: THINKING_CAN_DISABLE,
+    compat: QWEN_THINKING_COMPAT,
+  },
+
+  "moonshotai/kimi-k2-instruct": {
+    name: "Kimi K2 Instruct (Moonshot) — legacy",
+    reasoning: true,
+    input: ["text"],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 262144,
+    maxTokens: 32768,
+    thinkingLevelMap: THINKING_CAN_DISABLE,
+    compat: QWEN_THINKING_COMPAT,
+  },
+
+  "qwen/qwen3-coder-480b-a35b-instruct": {
+    name: "Qwen 3 Coder 480B (35B active) — legacy",
+    reasoning: false,
+    input: ["text"],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 262144,
+    maxTokens: 32768,
+    compat: BASE_COMPAT,
+  },
+
+  "meta-llama/llama-4-maverick": {
+    name: "Llama 4 Maverick (Meta) — legacy",
+    reasoning: false,
+    input: ["text", "image"],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 1048576,
+    maxTokens: 8192,
+    compat: BASE_COMPAT,
+  },
+
+  "meta-llama/llama-4-scout": {
+    name: "Llama 4 Scout (Meta) — legacy",
+    reasoning: false,
+    input: ["text", "image"],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 1048576,
+    maxTokens: 8192,
+    compat: BASE_COMPAT,
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -397,6 +518,10 @@ const DEFAULT_MODEL: CuratedModel = {
 };
 
 // Heuristic: infer reasoning support from model id for discovered models.
+// NOTE: "k2" alone is too broad (kimi-k2.5 is vision, not necessarily reasoning
+// in all contexts) but all current K2 variants on Novita do reason. "qwen3"
+// matches Qwen 3.x reasoning models but NOT qwen2.5-vl (which is not reasoning).
+// "v4" matches DeepSeek V4 reasoning models. "vl" alone is NOT reasoning.
 function inferReasoning(id: string): boolean {
   const lower = id.toLowerCase();
   return (
