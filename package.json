@@ -1,0 +1,20 @@
+{
+  "name": "pi-extension-novita",
+  "version": "0.1.0",
+  "description": "Pi coding-agent extension that registers novita.ai as a custom OpenAI-compatible provider.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "clean": "echo 'nothing to clean'",
+    "build": "echo 'nothing to build'",
+    "check": "echo 'nothing to check'"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  }
+}
