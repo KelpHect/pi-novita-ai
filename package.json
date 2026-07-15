@@ -1,6 +1,6 @@
 {
   "name": "pi-novita-ai",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Pi coding-agent extension that registers novita.ai as a custom OpenAI-compatible model provider (flagship: tencent/hy3).",
   "license": "MIT",
   "author": "KelpHect",
