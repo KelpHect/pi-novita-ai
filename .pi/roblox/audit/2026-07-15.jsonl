@@ -1,0 +1,2 @@
+{"id":"f52f578d-ea75-42e0-94e3-bb759bc2c4c6","timestamp":"2026-07-15T17:36:54.578Z","event":"studio.connected","cwd":"C:\\Projects\\pi-novita-ai","context":{"source":"runtime"},"data":{}}
+{"id":"16c3c173-1c20-45bf-9d6a-bfcb73a1797a","timestamp":"2026-07-15T17:36:54.580Z","event":"runtime.initialized","cwd":"C:\\Projects\\pi-novita-ai","context":{"source":"system"},"data":{"mode":"rojo","configExists":false,"rojoError":"ENOENT: no such file or directory, open 'C:\\Projects\\pi-novita-ai\\default.project.json'"}}

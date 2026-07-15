@@ -10,9 +10,10 @@ import {
   PROVIDER_ID,
   PROVIDER_LABEL,
 } from "./config.js";
-import { resolveEnvApiKey } from "./auth.js";
+import { probeChatCompletion } from "./novita-api.js";
 
 const AUTH_FILE = join(homedir(), ".pi", "agent", "auth.json");
+const PROBE_MODEL = "tencent/hy3";
 
 async function hasStoredLogin(): Promise<boolean> {
   try {
@@ -27,31 +28,53 @@ async function hasStoredLogin(): Promise<boolean> {
 }
 
 /**
- * `/novita` — shows which auth path is active and how many models are
- * registered. A missing key is the usual cause of Novita's 403
- * INVALID_API_KEY, so this is the first thing to check.
+ * `/novita [model]` — shows the active auth path, then live-probes a chat
+ * completion and reports Novita's actual error reason (INVALID_API_KEY,
+ * NOT_ENOUGH_BALANCE, ...), which Pi's own error display drops.
  */
 export function registerStatusCommand(
   pi: ExtensionAPI,
   modelCount: number,
 ): void {
   pi.registerCommand("novita", {
-    description: `Show ${PROVIDER_LABEL} auth status and registered models`,
-    handler: async (_args, ctx) => {
-      const loggedIn = await hasStoredLogin();
-      const envKeySet = resolveEnvApiKey() != null;
-
-      const auth = loggedIn
+    description: `Show ${PROVIDER_LABEL} auth status and test the API`,
+    handler: async (args, ctx) => {
+      const authSource = (await hasStoredLogin())
         ? "logged in via /login (auth.json)"
-        : envKeySet
+        : process.env[API_KEY_ENV]
           ? `using ${API_KEY_ENV} environment variable`
-          : `NOT CONFIGURED — run /login and select "${PROVIDER_LABEL}", ` +
-            `or export ${API_KEY_ENV}. Without a key Novita returns 403 ` +
-            `INVALID_API_KEY. Get a key at ${KEY_MANAGEMENT_URL}`;
+          : null;
 
+      if (!authSource) {
+        ctx.ui.notify(
+          `${PROVIDER_LABEL}: NOT CONFIGURED — run /login and select ` +
+            `"${PROVIDER_LABEL}", or export ${API_KEY_ENV}. ` +
+            `Get a key at ${KEY_MANAGEMENT_URL}`,
+          "warning",
+        );
+        return;
+      }
+
+      const apiKey = await ctx.modelRegistry.getApiKeyForProvider(PROVIDER_ID);
+      if (!apiKey) {
+        ctx.ui.notify(
+          `${PROVIDER_LABEL}: ${authSource}, but Pi could not resolve an API key from it`,
+          "error",
+        );
+        return;
+      }
+
+      const currentNovitaModel =
+        ctx.model?.provider === PROVIDER_ID ? ctx.model.id : undefined;
+      const model = args?.trim() || currentNovitaModel || PROBE_MODEL;
       ctx.ui.notify(
-        `${PROVIDER_LABEL}: ${modelCount} models registered · auth: ${auth}`,
-        loggedIn || envKeySet ? "info" : "warning",
+        `${PROVIDER_LABEL}: ${modelCount} models · ${authSource} · probing ${model}…`,
+        "info",
+      );
+      const probe = await probeChatCompletion(apiKey, model);
+      ctx.ui.notify(
+        `${PROVIDER_LABEL} probe: ${probe.detail}`,
+        probe.ok ? "info" : "error",
       );
     },
   });

@@ -1,4 +1,4 @@
-import { LOG_PREFIX, MODELS_URL } from "./config.js";
+import { BASE_URL, LOG_PREFIX, MODELS_URL } from "./config.js";
 
 interface NovitaModelsResponse {
   data?: Array<{ id?: unknown }>;
@@ -34,4 +34,48 @@ export async function fetchModelIds(
 /** A key is valid iff it can list models. */
 export async function isValidApiKey(apiKey: string): Promise<boolean> {
   return (await fetchModelIds(apiKey)) !== null;
+}
+
+export interface ProbeResult {
+  ok: boolean;
+  detail: string;
+}
+
+/**
+ * Sends a 1-token chat completion to surface errors Pi swallows — Novita
+ * encodes the real failure (INVALID_API_KEY, NOT_ENOUGH_BALANCE, ...) in the
+ * response body, but Pi only reports the bare status code.
+ */
+export async function probeChatCompletion(
+  apiKey: string,
+  model: string,
+): Promise<ProbeResult> {
+  try {
+    const response = await fetch(`${BASE_URL}/v1/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "user", content: "hi" }],
+        max_tokens: 1,
+      }),
+    });
+    if (response.ok) {
+      return { ok: true, detail: `${model} responded OK` };
+    }
+    const body = await response.text();
+    let reason = body.slice(0, 200);
+    try {
+      const parsed = JSON.parse(body) as { reason?: string; message?: string };
+      reason = [parsed.reason, parsed.message].filter(Boolean).join(": ") || reason;
+    } catch {
+      // non-JSON body — report it raw
+    }
+    return { ok: false, detail: `${model} → HTTP ${response.status} ${reason}` };
+  } catch (err) {
+    return { ok: false, detail: `request failed: ${String(err)}` };
+  }
 }
