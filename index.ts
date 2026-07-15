@@ -150,9 +150,9 @@ export default async function novitaProvider(pi: ExtensionAPI): Promise<void> {
 
   if (!apiKey) {
     console.error(
-      `[pi-novita] ${API_KEY_ENV} is not set; the Novita provider will be ` +
-        `registered but requests will fail until you export it. ` +
-        `Get a key at https://novita.ai -> API Keys.`,
+      `[pi-novita] ${API_KEY_ENV} is not set. Run /login in Pi and select ` +
+        `"${PROVIDER_DISPLAY_NAME}" to store your key in auth.json, or export ` +
+        `${API_KEY_ENV}. Get a key at https://novita.ai -> API Keys.`,
     );
   }
 

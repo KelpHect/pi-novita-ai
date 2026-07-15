@@ -12,43 +12,32 @@ pricing for the models we know about (notably **`tencent/hy3`**).
 
 ## Install
 
-### Option A — auto-discovery (recommended)
-
-Clone into Pi's global extensions directory so it is loaded automatically and
-supports `/reload`:
+Clone into Pi's global extensions directory so it is auto-discovered on startup
+and supports `/reload`:
 
 ```bash
 git clone https://github.com/KelpHect/pi-novita-ai.git ~/.pi/agent/extensions/pi-novita-ai
 ```
 
-### Option B — explicit load
+(For a quick test only, you can instead load it explicitly with
+`pi -e ./pi-novita-ai`, but the auto-discovery location is the intended setup.)
 
-```bash
-git clone https://github.com/KelpHect/pi-novita-ai.git
-pi -e ./pi-novita-ai
-```
+## Configure & use
 
-## Configure
+1. Start Pi.
+2. Run `/login` and select **Novita AI** — paste your Novita API key when
+   prompted. The key is stored in `~/.pi/agent/auth.json` under `novita`.
+   (Get a key from <https://novita.ai> → API Keys.)
+3. Run `/model` and pick a Novita model, e.g. `novita/tencent-hy3`.
 
-Set your Novita API key (get one from <https://novita.ai> → API Keys):
+That's it. Alternatively, you can set the key via environment variable instead
+of `/login`:
 
 ```bash
 export NOVITA_API_KEY=nva_xxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
-## Use
-
-Start Pi and select a model:
-
-```
-/model novita/tencent-hy3
-```
-
-Or list all registered Novita models:
-
-```bash
-pi --list-models | grep novita/
-```
+Auth file credentials (`/login`) take priority over the environment variable.
 
 ## How it works
 
