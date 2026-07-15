@@ -1,6 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
-import { novitaOAuth, resolveEnvApiKey } from "./auth.js";
+import { novitaOAuth } from "./auth.js";
 import {
   API_KEY_ENV,
   BASE_URL,
@@ -8,23 +8,29 @@ import {
   PROVIDER_ID,
   PROVIDER_LABEL,
 } from "./config.js";
-import { buildModelList } from "./model-list.js";
-import { fetchModelIds } from "./novita-api.js";
-import { registerOverflowRecovery } from "./overflow.js";
+import { registerErrorDecoder } from "./errors.js";
+import { FALLBACK_MODELS } from "./fallback-models.js";
+import { toProviderModel } from "./model-mapping.js";
+import { fetchModels } from "./novita-api.js";
 import { registerStatusCommand } from "./status-command.js";
 
+const DISCOVERY_TIMEOUT_MS = 5000;
+
 export default async function novita(pi: ExtensionAPI): Promise<void> {
-  // Startup discovery needs the env key; /login users still get the full
-  // curated catalog, and their stored key authenticates the actual requests.
-  const envKey = resolveEnvApiKey();
-  const discoveredIds = envKey ? await fetchModelIds(envKey) : null;
-  if (!discoveredIds) {
+  // /v1/models is unauthenticated, so discovery works before any key is
+  // configured. The endpoint is the single source of truth for names,
+  // capabilities, context windows, and pricing.
+  const discovered = await fetchModels(AbortSignal.timeout(DISCOVERY_TIMEOUT_MS));
+  if (!discovered) {
     console.error(
-      `${LOG_PREFIX} ${envKey ? "model discovery failed" : `${API_KEY_ENV} not set`}; ` +
-        `using the curated model list. Run /novita to check auth status.`,
+      `${LOG_PREFIX} could not reach ${BASE_URL} — registering the bundled ` +
+        `snapshot of Novita's recommended models instead.`,
     );
   }
-  const models = buildModelList(discoveredIds);
+
+  const models = (discovered ?? FALLBACK_MODELS)
+    .map(toProviderModel)
+    .filter((model) => model !== null);
 
   pi.registerProvider(PROVIDER_ID, {
     name: PROVIDER_LABEL,
@@ -36,6 +42,6 @@ export default async function novita(pi: ExtensionAPI): Promise<void> {
     oauth: novitaOAuth,
   });
 
-  registerOverflowRecovery(pi);
+  registerErrorDecoder(pi);
   registerStatusCommand(pi, models.length);
 }

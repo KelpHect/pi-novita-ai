@@ -1,8 +1,7 @@
 import {
-  API_KEY_ENV,
   KEY_MANAGEMENT_URL,
   LOG_PREFIX,
-  MODELS_URL,
+  PROBE_MODEL,
   PROVIDER_LABEL,
 } from "./config.js";
 import { isValidApiKey } from "./novita-api.js";
@@ -24,13 +23,10 @@ interface OAuthLoginCallbacks {
 // refreshToken returns them unchanged.
 const NON_EXPIRING_MS = 9_999_999_999_999;
 
-export function resolveEnvApiKey(): string | undefined {
-  return process.env[API_KEY_ENV];
-}
-
 /**
  * Pi `/login` flow for Novita: paste an API key (Novita has no browser
- * OAuth), validate it against /v1/models, and let Pi persist it to auth.json.
+ * OAuth), validate it with a live chat-completion probe, and let Pi persist
+ * it to auth.json.
  */
 export const novitaOAuth = {
   name: PROVIDER_LABEL,
@@ -45,9 +41,10 @@ export const novitaOAuth = {
     if (!key) {
       throw new Error(`${LOG_PREFIX} No API key entered.`);
     }
-    if (!(await isValidApiKey(key))) {
+    if (!(await isValidApiKey(key, PROBE_MODEL))) {
       throw new Error(
-        `${LOG_PREFIX} Key rejected by ${MODELS_URL}. Double-check it was copied correctly.`,
+        `${LOG_PREFIX} Novita rejected this key. Double-check it was copied ` +
+          `correctly from ${KEY_MANAGEMENT_URL}.`,
       );
     }
 
