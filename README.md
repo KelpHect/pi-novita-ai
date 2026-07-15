@@ -29,15 +29,50 @@ custom streaming code required.
 
 ## Install
 
-Clone into Pi's global extensions directory so it is auto-discovered on startup
-and supports `/reload`:
+### Via `pi install` (recommended)
+
+```bash
+pi install npm:pi-novita-ai
+```
+
+This installs the package from npm and registers it in `~/.pi/agent/settings.json`.
+Pi loads it automatically on every startup.
+
+To try it without installing:
+
+```bash
+pi -e npm:pi-novita-ai
+```
+
+To install at project level (shared with your team via `.pi/settings.json`):
+
+```bash
+pi install -l npm:pi-novita-ai
+```
+
+To update:
+
+```bash
+pi update npm:pi-novita-ai
+```
+
+To remove:
+
+```bash
+pi remove npm:pi-novita-ai
+```
+
+### Via git
+
+```bash
+pi install git:github.com/KelpHect/pi-novita-ai
+```
+
+### Manual (clone to extensions directory)
 
 ```bash
 git clone https://github.com/KelpHect/pi-novita-ai.git ~/.pi/agent/extensions/pi-novita-ai
 ```
-
-(For a quick test only, you can instead load it explicitly with
-`pi -e ./pi-novita-ai`, but the auto-discovery location is the intended setup.)
 
 ## Configure & use
 
