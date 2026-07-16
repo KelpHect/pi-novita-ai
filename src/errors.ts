@@ -5,14 +5,15 @@ import { parseNovitaError } from "./novita-api.js";
 
 // Documented at https://novita.ai/docs/api-reference/basic-error-code.
 const GUIDANCE: Record<string, string> = {
-  INVALID_API_KEY: `No valid API key was sent — run /login and select "Novita AI", or check /novita. Keys: ${KEY_MANAGEMENT_URL}`,
-  FAILED_TO_AUTH: `The API key was rejected — re-run /login with a fresh key from ${KEY_MANAGEMENT_URL}`,
+  INVALID_API_KEY: `No valid API key was sent. Run /login and select "Novita AI", or check /novita. Keys: ${KEY_MANAGEMENT_URL}`,
+  FAILED_TO_AUTH: `The API key was rejected. Re-run /login with a fresh key from ${KEY_MANAGEMENT_URL}`,
   NOT_ENOUGH_BALANCE:
-    "Your Novita account balance is empty (required even for $0 models) — top up or redeem credits at https://novita.ai/billing",
-  MODEL_NOT_FOUND: "This model id is not available on Novita — pick another with /model",
-  RATE_LIMIT_EXCEEDED: "Novita rate limit hit — retry shortly, or raise limits at https://novita.ai/quota-limits/llm",
-  TOKEN_LIMIT_EXCEEDED: "Novita token-throughput limit hit — retry shortly, or raise limits at https://novita.ai/quota-limits/llm",
-  SERVICE_NOT_AVAILABLE: "Novita reports the service is temporarily unavailable — retry shortly",
+    "Your Novita account balance is empty. Top up or redeem credits at https://novita.ai/billing",
+  MODEL_NOT_FOUND: "This model id is not available on Novita. Pick another with /model",
+  INVALID_REQUEST_BODY: "The request was rejected. Reduce the context or report a compatibility issue if the request is otherwise valid",
+  RATE_LIMIT_EXCEEDED: "Novita rate limit hit. Retry shortly, or raise limits at https://novita.ai/quota-limits/llm",
+  TOKEN_LIMIT_EXCEEDED: "Novita token-throughput limit hit. Retry shortly, or raise limits at https://novita.ai/quota-limits/llm",
+  SERVICE_NOT_AVAILABLE: "Novita reports the service is temporarily unavailable. Retry shortly",
   ACCESS_DENY: "Novita denied access to this model or endpoint for your account",
 };
 
@@ -25,19 +26,14 @@ const OVERFLOW_PATTERN =
 
 /**
  * Pi surfaces provider failures as "<status>: <body>". Novita's body is
- * {code, reason, message} — this handler decodes it into an actionable
+ * {code, reason, message}. This handler decodes it into an actionable
  * message and normalizes context-overflow errors so Pi can auto-compact.
  */
 export function registerErrorDecoder(pi: ExtensionAPI): void {
-  pi.on("message_end", (event, ctx) => {
+  pi.on("message_end", (event) => {
     const message = event.message;
     if (message.role !== "assistant" || message.stopReason !== "error") return;
-    if (
-      message.provider !== PROVIDER_ID &&
-      ctx.model?.provider !== PROVIDER_ID
-    ) {
-      return;
-    }
+    if (message.provider !== PROVIDER_ID) return;
 
     const decoded = decodeErrorMessage(message.errorMessage ?? "");
     if (!decoded) return;

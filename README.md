@@ -1,125 +1,256 @@
 # pi-novita-ai
 
-A [Pi](https://pi.dev) coding-agent extension that registers
-[novita.ai](https://novita.ai) as a custom model provider.
+A [Pi](https://pi.dev) extension that registers [Novita AI](https://novita.ai)
+as an OpenAI-compatible Chat Completions provider.
 
-Novita exposes an OpenAI-compatible Chat Completions API at
-`https://api.novita.ai/openai` with `Authorization: Bearer` auth. This
-extension uses Pi's built-in `openai-completions` streaming implementation — no
-custom streaming code required.
+The extension delegates streaming to Pi's built-in `openai-completions`
+implementation. It adds Novita-specific authentication, live model discovery,
+capability and price mapping, diagnostics, error decoding, and an offline
+fallback catalog.
+
+Capabilities vary by model and can change when Novita updates its catalog. The
+extension maps only capabilities represented by both Novita metadata and Pi.
 
 ## Features
 
-- **`/login` integration** — "Novita AI" appears in Pi's `/login` menu; paste
-  your API key, it's validated with a live probe, and stored in `auth.json`
-- **Full live model catalog** — every chat model from `/v1/models`
-  (no auth required), with names, context windows, max output tokens,
-  reasoning and vision capabilities taken directly from the API
-- **Accurate cost tracking** — real per-model USD pricing including cache-read
-  rates and Novita's tiered billing (mapped to Pi's native cost tiers)
-- **Reasoning / extended thinking** — `enable_thinking` toggle (the control
-  Novita documents), with reasoning content echoed across tool calls per
-  Novita's interleaved-thinking requirements
-- **Vision** — models with `image` in `input_modalities` accept images
-- **Function calling & structured outputs** — via the OpenAI-compatible API
-- **Prompt caching** — implicit on Novita; cache-read costs tracked
-- **Decoded errors** — Novita's `{code, reason, message}` bodies become
-  actionable messages ("NOT_ENOUGH_BALANCE → top up at novita.ai/billing"),
-  and context-overflow errors are normalized so Pi can auto-compact and retry
-- **`/novita [model]` command** — shows the active auth path and runs a live
-  1-token probe that reports Novita's real error reason
-- **Offline resilience** — if `/v1/models` is unreachable, a bundled snapshot
-  of Novita's recommended models registers instead
+- `/login` integration with non-billable API-key validation through Novita's
+  balance endpoint
+- Live, schema-validated discovery of Pi-compatible chat models
+- Bundled fallback metadata for Novita's recommended models
+- Context windows, output limits, vision, reasoning, and display names mapped
+  from Novita's catalog
+- USD cost tracking for input, output, and cache-read tokens, including tiered
+  prices
+- Novita's documented `enable_thinking` control and reasoning-content replay
+  across tool calls
+- Function calling and structured-output requests through Chat Completions
+- Actionable decoding of Novita's structured error responses
+- `/novita [model]` for credential and one-token completion diagnostics
+- Offline startup and package-level verification with a real Pi CLI
+
+## Requirements
+
+- Node.js 22.19.0 or newer
+- Pi 0.80.7 or newer
+- A [Novita API key](https://novita.ai/settings/key-management) for model calls
 
 ## Install
 
-### Via `pi install` (recommended)
+Install globally for the current Pi user:
 
 ```bash
 pi install npm:pi-novita-ai
 ```
 
-This installs the package from npm and registers it in `~/.pi/agent/settings.json`.
-Pi loads it automatically on every startup.
-
-To try it without installing:
-
-```bash
-pi -e npm:pi-novita-ai
-```
-
-To install at project level (shared with your team via `.pi/settings.json`):
+Install for the current project instead:
 
 ```bash
 pi install -l npm:pi-novita-ai
 ```
 
-To update:
+Try the published package without installing it:
 
 ```bash
-pi update npm:pi-novita-ai
+pi -e npm:pi-novita-ai
 ```
 
-To remove:
-
-```bash
-pi remove npm:pi-novita-ai
-```
-
-### Via git
+Other supported package sources:
 
 ```bash
 pi install git:github.com/KelpHect/pi-novita-ai
-```
-
-### Manual (clone to extensions directory)
-
-```bash
 git clone https://github.com/KelpHect/pi-novita-ai.git ~/.pi/agent/extensions/pi-novita-ai
 ```
 
-## Configure & use
+Update or remove the npm package with `pi update npm:pi-novita-ai` or
+`pi remove npm:pi-novita-ai`.
 
-1. Start Pi.
-2. Run `/login` and select **Novita AI** — paste your Novita API key when
-   prompted. The key is verified against `/v1/models` and stored in
-   `~/.pi/agent/auth.json` under `novita`.
-   (Get a key from <https://novita.ai/settings/key-management>.)
-3. Run `/model` and pick a Novita model, e.g. `novita/tencent-hy3`.
+## Authenticate and use
 
-Alternatively, you can set the key via environment variable instead of `/login`:
+1. Start Pi and run `/login`.
+2. Select **Novita AI** and paste a key from
+   [Novita key management](https://novita.ai/settings/key-management).
+3. Run `/model` and select a `novita/...` model.
+
+The login flow validates the key against Novita's documented balance endpoint.
+It accepts the key only after a well-formed success response, rejects confirmed
+authentication failures, and treats timeouts or malformed provider responses
+as temporary validation failures. Pi stores accepted credentials in its normal
+credential store.
+
+An environment variable can be used instead:
 
 ```bash
-export NOVITA_API_KEY=nva_xxxxxxxxxxxxxxxxxxxxxxxx
+export NOVITA_API_KEY=your-key
 ```
 
-`/login` credentials take priority over the environment variable. If neither
-is configured, Novita returns `HTTP 403 INVALID_API_KEY` for every request,
-regardless of which model you pick. Run `/novita` at any time to see which
-auth path is active.
+PowerShell:
 
-## Models
+```powershell
+$env:NOVITA_API_KEY = "your-key"
+```
 
-The full chat-model catalog (~139 models) is fetched live from
-`GET /openai/v1/models` at startup — including
-[Novita's recommended models](https://novita.ai/docs/guides/llm-recommended)
-such as `tencent/hy3` (free), `moonshotai/kimi-k2.7-code`, `zai-org/glm-5.2`,
-`deepseek/deepseek-v4-pro`, and `minimax/minimax-m3`. Display names,
-context windows, max output tokens, capabilities, and USD pricing all come
-from the API, so newly launched models and price changes appear without an
-extension update.
+Pi's documented provider order is an explicit per-request override, stored
+credentials from `/login`, the provider environment variable, then any
+provider fallback. This extension supplies no fallback secret. In normal use,
+stored `/login` credentials therefore take priority over `NOVITA_API_KEY`.
+Run `/novita` to confirm that credentials resolve and to probe the active or
+preferred Novita model. Pass a model explicitly when needed:
+
+```text
+/novita deepseek/deepseek-v3.2
+```
+
+The probe sends a one-output-token request and reports Novita's actual
+structured failure reason, such as `NOT_ENOUGH_BALANCE` or `MODEL_NOT_FOUND`.
+
+## Model discovery and fallback
+
+At startup, the extension requests `GET https://api.novita.ai/openai/v1/models`.
+If `NOVITA_API_KEY` is set it is sent with discovery; otherwise discovery is
+attempted without credentials. Although the endpoint currently responds
+without a key, Novita's API reference documents bearer authentication, so the
+bundled fallback remains the supported failure path.
+
+The response is treated as untrusted data. The extension validates model IDs,
+numeric bounds, known capabilities and modalities, endpoints, prices, and
+billing tiers; removes duplicates deterministically; and registers only chat
+models that support `chat/completions`. If the request fails, the schema is
+invalid, the catalog is empty, or no usable chat model remains, a bundled set
+of recommended models is registered instead.
+
+Set `PI_OFFLINE=1` to skip discovery deliberately. Refresh the fallback from a
+validated live catalog with:
+
+```bash
+npm run catalog:refresh
+```
+
+The generated source records the endpoint and refresh date. Review the diff
+before committing because Novita can change model metadata and prices.
+
+## Pricing and prompt caching
+
+Novita catalog prices are converted to Pi's USD-per-million-token cost format.
+The mapping includes prompt, completion, and cache-read rates. Prompt caching
+is implicit on Novita, so the extension sends no cache-control parameters and
+tracks cached input from the standard streaming usage response.
+
+For tiered models, Novita's `min_tokens` lower boundary is mapped to Pi's
+strict `inputTokensAbove` threshold by subtracting one token. This implements
+the catalog boundary as inclusive. Novita does not document the inclusivity
+of overlapping tier endpoints explicitly; the mapping and its boundary are
+covered by unit tests and should be rechecked if Novita clarifies the contract.
+
+## Reasoning, tools, and structured output
+
+Reasoning models use Novita's documented top-level `enable_thinking` boolean.
+Pi's supported reasoning labels therefore map to on or off; Novita does not
+offer effort granularity for this API. Reasoning content is replayed with
+assistant tool-call messages as required for interleaved thinking.
+
+The extension does not request `reasoning_split` or `separate_reasoning`.
+Novita's current documentation uses both names in different places, while the
+default `reasoning_content` stream requires no request change. Pi accepts that
+default stream. Function calling and structured-output requests use Pi's normal
+OpenAI Chat Completions implementation when the selected model advertises the
+corresponding capability.
+
+## Errors and diagnostics
+
+Novita error bodies shaped as `{code, reason, message}` are decoded into useful
+Pi messages. Guidance is included for invalid credentials, insufficient
+balance, missing models, invalid requests, rate and token limits, service
+availability, and access denial. Context-overflow wording is normalized so Pi
+can compact and retry.
+
+If a request fails:
+
+1. Run `/novita` to check credential resolution and a minimal completion.
+2. Run `/login` again if the key was rejected.
+3. Check [billing](https://novita.ai/billing) for `NOT_ENOUGH_BALANCE`.
+4. Select another model with `/model` for `MODEL_NOT_FOUND` or `ACCESS_DENY`.
+5. Retry later or review Novita limits for rate, throughput, or service errors.
+
+The extension never logs API keys. Network diagnostics return bounded provider
+details and generic transport errors instead of exception bodies that might
+contain credentials.
+
+## Security and trust
+
+Pi packages execute code with the user's permissions. Review the source of any
+third-party package before installing it. This package makes HTTPS requests to
+Novita's API and balance endpoints; when a Novita model is selected, prompts,
+tool-call conversations, and supported image inputs are sent to Novita.
+
+The API key is stored through Pi's credential mechanism after `/login`, or read
+from `NOVITA_API_KEY`. The package does not include telemetry, a publishing
+workflow, or a separate credential store.
+
+## Development and verification
+
+Install exact development dependencies and run the full offline gate:
+
+```bash
+npm ci
+npm run verify
+```
+
+`verify` runs strict TypeScript checking, the mocked unit suite, an exact
+`npm pack` content and secret audit, installation of the generated tarball into
+a clean temporary consumer, a packed-extension load, and model listing through
+the real Pi CLI. CI runs the same gate on Node.js 22.19.0 and Node.js 24.
+
+Additional commands:
+
+```bash
+npm test                 # mocked unit suite
+npm run test:watch       # unit tests in watch mode
+npm run test:live        # optional credentialed Novita checks
+npm run pack:check       # exact tarball allowlist and secret scan
+npm run smoke:pack       # clean install plus real Pi CLI smoke test
+```
+
+The live suite skips explicitly when `NOVITA_API_KEY` is absent. With a key it
+checks authenticated discovery and non-billable key validation. Set
+`NOVITA_TEST_MODEL` to enable a minimal streaming completion with usage after
+reviewing that model's current price. Tool-call and reasoning checks also
+require explicit model choices:
+
+```bash
+NOVITA_API_KEY=your-key \
+NOVITA_TEST_MODEL=provider/chat-model \
+NOVITA_TOOL_TEST_MODEL=provider/tool-model \
+NOVITA_REASONING_TEST_MODEL=provider/reasoning-model \
+npm run test:live
+```
+
+Use the equivalent `$env:NAME = "value"` assignments in PowerShell.
+
+`prepublishOnly` runs the full offline verification gate. Publishing remains a
+separate maintainer action; no script in this repository publishes, tags, or
+pushes a release.
+
+## Contributing
+
+Keep runtime changes small and add mocked coverage for every protocol edge
+case. Run `npm run verify` before opening a pull request. If model metadata or
+pricing changes, run `npm run catalog:refresh`, review the generated diff, and
+state whether credentialed live tests were run. Never add API keys, captured
+private responses, local Pi state, or generated tarballs to the repository.
 
 ## Known limitations
 
-- Novita documents `enable_thinking` as the only thinking control, so Pi's
-  thinking-level selector maps to on/off for Novita models (no effort
-  granularity on the wire).
-- Novita's structured `reasoning_details` format (`reasoning_split: true`) is
-  not requested; Pi consumes the default `reasoning_content` stream, which
-  Novita states requires no request changes.
-- Audio and video input modalities (a handful of Qwen omni models) are not
-  supported by Pi and are registered as text/image only.
+- Audio and video inputs are not supported by Pi and are registered as text or
+  text-plus-image only.
+- Reasoning is on or off because Novita documents no effort levels for Chat
+  Completions.
+- Structured reasoning details are not requested because Novita's parameter
+  names are currently inconsistent across its documentation.
+- A fallback catalog is a snapshot. Run `npm run catalog:refresh` before a
+  release and review pricing changes.
+- Startup discovery is intentionally bounded; a slow or unavailable endpoint
+  uses the fallback instead of delaying Pi indefinitely.
 
 ## License
 
-MIT
+[MIT](LICENSE)

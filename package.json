@@ -1,7 +1,7 @@
 {
   "name": "pi-novita-ai",
   "version": "2.0.0",
-  "description": "Pi coding-agent extension that registers novita.ai as a custom OpenAI-compatible model provider (flagship: tencent/hy3).",
+  "description": "Pi extension that registers Novita AI as an OpenAI-compatible model provider.",
   "license": "MIT",
   "author": "KelpHect",
   "homepage": "https://github.com/KelpHect/pi-novita-ai",
@@ -20,8 +20,7 @@
     "novita-ai",
     "llm",
     "openai-compatible",
-    "tencent-hy3",
-    "ai",
+    "ai-provider",
     "coding-agent"
   ],
   "type": "module",
@@ -31,7 +30,15 @@
     "LICENSE"
   ],
   "scripts": {
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "test": "tsx --test --test-concurrency=1 tests/unit/*.test.ts",
+    "test:watch": "tsx --test --watch --test-concurrency=1 tests/unit/*.test.ts",
+    "test:live": "tsx --test --test-concurrency=1 tests/live/novita.live.ts",
+    "pack:check": "node scripts/package-check.mjs",
+    "smoke:pack": "node scripts/packed-install-smoke.mjs",
+    "catalog:refresh": "tsx scripts/refresh-fallback-models.ts",
+    "verify": "npm run check && npm test && npm run pack:check && npm run smoke:pack",
+    "prepublishOnly": "npm run verify"
   },
   "pi": {
     "extensions": [
@@ -39,10 +46,17 @@
     ]
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "*"
+    "@earendil-works/pi-ai": ">=0.80.7",
+    "@earendil-works/pi-coding-agent": ">=0.80.7"
   },
   "devDependencies": {
+    "@earendil-works/pi-ai": "^0.80.7",
     "@earendil-works/pi-coding-agent": "^0.80.7",
+    "@types/node": "^22.19.0",
+    "tsx": "^4.23.1",
     "typescript": "^7.0.2"
+  },
+  "engines": {
+    "node": ">=22.19.0"
   }
 }
