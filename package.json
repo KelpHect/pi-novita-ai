@@ -1,6 +1,6 @@
 {
   "name": "pi-novita-ai",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Pi extension that registers Novita AI as an OpenAI-compatible model provider.",
   "license": "MIT",
   "author": "KelpHect",
