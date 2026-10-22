@@ -21,7 +21,8 @@ extension maps only capabilities represented by both Novita metadata and Pi.
   from Novita's catalog
 - USD cost tracking for input, output, and cache-read tokens, including tiered
   prices
-- Novita's documented `enable_thinking` control and reasoning-content replay
+- Novita's documented `enable_thinking` control, per-family `reasoning_effort`
+  effort levels for DeepSeek v4 and GLM-5.2/5.3, and reasoning-content replay
   across tool calls
 - Function calling and structured-output requests through Chat Completions
 - Actionable decoding of Novita's structured error responses
@@ -143,10 +144,16 @@ covered by unit tests and should be rechecked if Novita clarifies the contract.
 
 ## Reasoning, tools, and structured output
 
-Reasoning models use Novita's documented top-level `enable_thinking` boolean.
-Pi's supported reasoning labels therefore map to on or off; Novita does not
-offer effort granularity for this API. Reasoning content is replayed with
-assistant tool-call messages as required for interleaved thinking.
+Most reasoning models use Novita's documented top-level `enable_thinking`
+boolean, so Pi's reasoning labels map to on or off. Effort-based families
+(DeepSeek v4 and GLM-5.2/5.3) instead carry effort through the
+`reasoning_effort` parameter, with each family's vocabulary pinned from its
+upstream vendor docs because Novita's own docs do not document the parameter.
+DeepSeek v4 toggles thinking via `thinking: { type }`; GLM-5.2 disables it
+through `reasoning_effort: "none"` and GLM-5.3 has forced thinking with no
+off value. Unverified reasoning models keep the generic on/off behavior.
+Reasoning content is replayed with assistant tool-call messages as required
+for interleaved thinking.
 
 The extension does not request `reasoning_split` or `separate_reasoning`.
 Novita's current documentation uses both names in different places, while the
@@ -242,8 +249,10 @@ private responses, local Pi state, or generated tarballs to the repository.
 
 - Audio and video inputs are not supported by Pi and are registered as text or
   text-plus-image only.
-- Reasoning is on or off because Novita documents no effort levels for Chat
-  Completions.
+- Reasoning is on or off for most models because Novita documents no effort
+  levels for Chat Completions, except the DeepSeek v4 and GLM-5.2/5.3
+  families, whose `reasoning_effort` vocabularies are pinned from upstream
+  vendor docs.
 - Structured reasoning details are not requested because Novita's parameter
   names are currently inconsistent across its documentation.
 - A fallback catalog is a snapshot. Run `npm run catalog:refresh` before a
