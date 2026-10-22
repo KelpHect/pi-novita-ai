@@ -27,7 +27,7 @@ export interface OpenAICompletionsCompat {
   supportsStrictMode?: boolean;
   maxTokensField?: "max_completion_tokens" | "max_tokens";
   requiresReasoningContentOnAssistantMessages?: boolean;
-  thinkingFormat?: "qwen" | "deepseek" | "zai";
+  thinkingFormat?: "qwen" | "deepseek" | "zai" | "openai";
 }
 
 export interface ProviderModel {
@@ -105,17 +105,25 @@ const DEEPSEEK_EFFORT_COMPAT: OpenAICompletionsCompat = {
   thinkingFormat: "deepseek",
 };
 
-// GLM-5.2/5.3 keep thinking at its API default (enabled for 5.2, forced
-// enabled for 5.3) and carry effort through `reasoning_effort` on top of the
-// vendor thinking envelope: pi-ai's "zai" thinkingFormat sends
-// thinking:{type:"enabled",clear_thinking:false} when an effort is selected
-// (z.ai recommends clear_thinking:false for 5.3-Flash) and
-// thinking:{type:"disabled"} when off is picked, plus the mapped
-// reasoning_effort. Live-probed against Novita's endpoint: both shapes
-// accepted, thinking stops on the disabled envelope.
+// GLM-5.2 keeps thinking at its API default (enabled) and carries effort
+// through `reasoning_effort` on top of the vendor thinking envelope: pi-ai's
+// "zai" thinkingFormat sends thinking:{type:"enabled",clear_thinking:false}
+// when an effort is selected and thinking:{type:"disabled"} when off is
+// picked, plus the mapped reasoning_effort. Live-probed against Novita's
+// endpoint: both shapes accepted, thinking stops on the disabled envelope.
 const GLM_EFFORT_COMPAT: OpenAICompletionsCompat = {
   ...EFFORT_REASONING_COMPAT,
   thinkingFormat: "zai",
+};
+
+// GLM-5.3 is forced-thinking, so no thinking envelope is ever sent: the
+// "zai" format would emit thinking:{type:"disabled"} whenever no effort is
+// passed (e.g. branch summarization). pi-ai's plain "openai" path sends
+// reasoning_effort only when an effort is selected and nothing otherwise
+// (the family's `off` is null).
+const GLM_FORCED_EFFORT_COMPAT: OpenAICompletionsCompat = {
+  ...EFFORT_REASONING_COMPAT,
+  thinkingFormat: "openai",
 };
 
 /**
@@ -134,7 +142,7 @@ interface ThinkingFamily {
   /** Value that disables thinking; null when impossible. */
   off: string | null;
   /** pi-ai thinkingFormat producing the family's wire shape. */
-  thinkingFormat: "deepseek" | "zai";
+  thinkingFormat: "deepseek" | "zai" | "openai";
   /** Reference documenting the family's reasoning vocabulary. */
   docs: string;
 }
@@ -159,7 +167,7 @@ const THINKING_FAMILIES: readonly ThinkingFamily[] = [
     prefixes: ["zai-org/glm-5.3"],
     levels: ["low", "high", "max"],
     off: null,
-    thinkingFormat: "zai",
+    thinkingFormat: "openai",
     docs: "https://docs.z.ai/guides/llm/glm-5.3",
   },
   {
@@ -191,16 +199,19 @@ interface ResolvedThinkingFamily {
   compat: OpenAICompletionsCompat;
 }
 
+const COMPAT_BY_FORMAT: Record<ThinkingFamily["thinkingFormat"], OpenAICompletionsCompat> = {
+  deepseek: DEEPSEEK_EFFORT_COMPAT,
+  zai: GLM_EFFORT_COMPAT,
+  openai: GLM_FORCED_EFFORT_COMPAT,
+};
+
 /** Derived per-family maps and compat, built once at module load. */
 const THINKING_FAMILIES_RESOLVED: ReadonlyArray<
   ResolvedThinkingFamily & { prefixes: readonly string[] }
 > = THINKING_FAMILIES.map((family) => ({
   prefixes: family.prefixes,
   thinkingLevelMap: buildThinkingMap(family),
-  compat:
-    family.thinkingFormat === "deepseek"
-      ? DEEPSEEK_EFFORT_COMPAT
-      : GLM_EFFORT_COMPAT,
+  compat: COMPAT_BY_FORMAT[family.thinkingFormat],
 }));
 
 function thinkingFamilyFor(id: string): ResolvedThinkingFamily | undefined {

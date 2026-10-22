@@ -147,10 +147,23 @@ test("deepseek-v4 family matches effort compat and distinct low/high/max levels"
   }
 });
 
-test("glm-5.3 family has forced thinking with no off level", () => {
-  for (const id of ["zai-org/glm-5.3-flash"]) {
+test("novita deepseek v4 variants resolve to the deepseek family", () => {
+  for (const id of [
+    "deepseek/deepseek-v4.1-flash",
+    "deepseek/deepseek-v4-pro-0813",
+    "deepseek/deepseek-v4-flash-0731-p",
+  ]) {
     const model = map({ id, features: ["reasoning"] });
-    assert.equal(model.compat.thinkingFormat, "zai", id);
+    assert.equal(model.compat.thinkingFormat, "deepseek", id);
+    assert.equal(model.thinkingLevelMap?.off, "off", id);
+    assert.equal(model.thinkingLevelMap?.max, "max", id);
+  }
+});
+
+test("glm-5.3 family has forced thinking with no off level", () => {
+  for (const id of ["zai-org/glm-5.3", "zai-org/glm-5.3-flash"]) {
+    const model = map({ id, features: ["reasoning"] });
+    assert.equal(model.compat.thinkingFormat, "openai", id);
     assert.equal(model.compat.supportsReasoningEffort, true, id);
     assert.equal(
       model.compat.requiresReasoningContentOnAssistantMessages,
@@ -172,7 +185,7 @@ test("glm-5.3 family has forced thinking with no off level", () => {
   }
 });
 
-test("glm-5.2 family disables thinking via reasoning_effort none", () => {
+test("glm-5.2 family keeps the zai envelope and maps off to none", () => {
   const model = map({ id: "zai-org/glm-5.2", features: ["reasoning"] });
   assert.equal(model.compat.thinkingFormat, "zai");
   assert.equal(model.compat.supportsReasoningEffort, true);

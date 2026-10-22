@@ -18,7 +18,10 @@ function runNode(script, args, options = {}) {
 function runNpm(args, cwd) {
   const npmCli = process.env.npm_execpath;
   if (!npmCli) throw new Error("npm_execpath is not available");
-  return runNode(npmCli, args, { cwd });
+  return runNode(npmCli, args, {
+    cwd,
+    env: { ...process.env, npm_config_allow_scripts: "" },
+  });
 }
 
 try {

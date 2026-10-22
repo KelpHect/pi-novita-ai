@@ -305,6 +305,38 @@ export async function fetchModels(
   }
 }
 
+export interface OpenAIStyleError {
+  message: string;
+  type?: string;
+}
+
+/**
+ * Decodes OpenAI-shaped error bodies: the `{error:{message,type,...}}`
+ * wrapper and the unwrapped top-level `{message,type}` form.
+ */
+export function parseOpenAIStyleError(body: string): OpenAIStyleError | null {
+  try {
+    const parsed = JSON.parse(body) as unknown;
+    if (!isRecord(parsed)) return null;
+    const source = isRecord(parsed.error) ? parsed.error : parsed;
+    const message = source.message;
+    if (typeof message !== "string" || message.length === 0) return null;
+    const type = source.type;
+    return typeof type === "string" && type.length > 0
+      ? { message, type }
+      : { message };
+  } catch {
+    return null;
+  }
+}
+
+function describeBody(body: string): string {
+  const error = parseOpenAIStyleError(body);
+  if (!error) return safeBodyDetail(body);
+  const text = error.type ? `${error.type}: ${error.message}` : error.message;
+  return safeBodyDetail(text);
+}
+
 export function parseNovitaError(body: string): NovitaError | null {
   try {
     const parsed = JSON.parse(body) as unknown;
@@ -398,7 +430,7 @@ export async function probeChatCompletion(
       error: error ?? undefined,
       detail: error
         ? `${model}: HTTP ${response.status} ${error.reason}: ${error.message}`
-        : `${model}: HTTP ${response.status}: ${safeBodyDetail(body)}`,
+        : `${model}: HTTP ${response.status}: ${describeBody(body)}`,
     };
   } catch (error) {
     const detail = isAbortError(error, signal)
@@ -473,7 +505,7 @@ export async function validateApiKey(
       error: error ?? undefined,
       detail: error
         ? `${error.reason}: ${error.message}`
-        : `HTTP ${response.status}: ${safeBodyDetail(body)}`,
+        : `HTTP ${response.status}: ${describeBody(body)}`,
     };
   } catch (error) {
     const detail = isAbortError(error, signal)

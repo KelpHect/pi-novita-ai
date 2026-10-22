@@ -25,14 +25,14 @@ extension maps only capabilities represented by both Novita metadata and Pi.
   effort levels for DeepSeek v4 and GLM-5.2/5.3, and reasoning-content replay
   across tool calls
 - Function calling and structured-output requests through Chat Completions
-- Actionable decoding of Novita's structured error responses
+- Actionable decoding of Novita's structured and OpenAI-shaped error responses
 - `/novita [model]` for credential and one-token completion diagnostics
 - Offline startup and package-level verification with a real Pi CLI
 
 ## Requirements
 
 - Node.js 22.19.0 or newer
-- Pi 0.80.7 or newer
+- Pi 1.0.0 or newer
 - A [Novita API key](https://novita.ai/settings/key-management) for model calls
 
 ## Install
@@ -149,15 +149,23 @@ boolean, so Pi's reasoning labels map to on or off. Effort-based families
 (DeepSeek v4 and GLM-5.2/5.3) instead carry effort through the
 `reasoning_effort` parameter, with each family's vocabulary pinned from its
 upstream vendor docs because Novita's own docs do not document the parameter.
-DeepSeek v4 toggles thinking via `thinking: { type }`; GLM-5.2 disables it
-through `reasoning_effort: "none"` and GLM-5.3 has forced thinking with no
-off value. Unverified reasoning models keep the generic on/off behavior.
+DeepSeek v4 toggles thinking via `thinking: { type }`. GLM-5.2 sends
+`thinking: { type: "enabled", clear_thinking: false }` with the selected effort
+and disables thinking with `thinking: { type: "disabled" }` (not
+`reasoning_effort: "none"`). GLM-5.3 has forced thinking, so it takes the plain
+`reasoning_effort` path with no thinking envelope: `reasoning_effort` is sent
+only when an effort is selected, and nothing is sent when none is. Unverified
+reasoning models keep the generic on/off behavior.
+
+Novita's chat-completion docs now state that always-on models such as
+`zai-org/glm-5.3` ignore `enable_thinking`.
 Reasoning content is replayed with assistant tool-call messages as required
 for interleaved thinking.
 
 The extension does not request `reasoning_split` or `separate_reasoning`.
-Novita's current documentation uses both names in different places, while the
-default `reasoning_content` stream requires no request change. Pi accepts that
+Novita's current documentation uses both names in different places and now
+documents `separate_reasoning` (default false). It is not live-verified, and
+the default `reasoning_content` stream requires no request change. Pi accepts that
 default stream. Function calling and structured-output requests use Pi's normal
 OpenAI Chat Completions implementation when the selected model advertises the
 corresponding capability.
@@ -167,8 +175,15 @@ corresponding capability.
 Novita error bodies shaped as `{code, reason, message}` are decoded into useful
 Pi messages. Guidance is included for invalid credentials, insufficient
 balance, missing models, invalid requests, rate and token limits, service
-availability, and access denial. Context-overflow wording is normalized so Pi
-can compact and retry.
+availability, and access denial. OpenAI-shaped bodies, either the
+`{error: {message, type}}` wrapper or a top-level `{message, type}`, are decoded
+to `Novita <type> (HTTP <status>): <message>`, and a `trace_id` is kept visible.
+A bare `<status> status code (no body)` failure gets status-specific guidance.
+An empty 400 and an `invalid_request_error` whose message starts with
+"invalid request error" are usually intermittent upstream rejections of a
+tool-calling continuation, so their message says the request can be retried,
+which triggers Pi's bounded automatic retry. No other error carries that
+phrase. Context-overflow wording is normalized so Pi can compact and retry.
 
 If a request fails:
 
