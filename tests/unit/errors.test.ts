@@ -48,6 +48,85 @@ test("decodeErrorMessage normalizes overflow exactly once", () => {
   );
 });
 
+const RETRY_MARKER = "you can retry your request";
+
+test("decodeErrorMessage decodes the OpenAI wrapper and top-level shapes", () => {
+  const wrapped = decodeErrorMessage(
+    '400: {"error":{"message":"bad things","type":"invalid_request_error","code":null,"param":null}}',
+  );
+  assert.match(wrapped ?? "", /^Novita invalid_request_error \(HTTP 400\): bad things\. /);
+  const topLevel = decodeErrorMessage(
+    '429: {"message":"slow down","type":"rate_limit_error"}',
+  );
+  assert.equal(topLevel, "Novita rate_limit_error (HTTP 429): slow down");
+  assert.equal(
+    decodeErrorMessage('500: {"message":"boom"}'),
+    "Novita error (HTTP 500): boom",
+  );
+  assert.equal(decodeErrorMessage('{"message":"no status","type":"x"}'), "Novita x: no status");
+});
+
+test("decodeErrorMessage keeps Novita shape output unchanged", () => {
+  assert.equal(
+    decodeErrorMessage(
+      '400: {"code":400,"reason":"INVALID_REQUEST_BODY","message":"invalid request error trace_id: abc"}',
+    ),
+    "Novita INVALID_REQUEST_BODY (HTTP 400): invalid request error trace_id: abc. " +
+      "The request was rejected. Reduce the context or report a compatibility issue if the request is otherwise valid",
+  );
+});
+
+test("retry marker appears only for the intermittent 400 signatures", () => {
+  const intermittent = [
+    "400 status code (no body)",
+    '400: {"message":"invalid request error trace_id: abc123","type":"invalid_request_error"}',
+    '400: {"error":{"message":"Invalid Request Error: x","type":"invalid_request_error"}}',
+  ];
+  for (const message of intermittent) {
+    assert.ok(decodeErrorMessage(message)?.includes(RETRY_MARKER), message);
+  }
+
+  const withoutMarker = [
+    '400: {"message":"max_tokens is too large","type":"invalid_request_error"}',
+    '400: {"message":"invalid request error","type":"other_error"}',
+    '400: {"message":"invalid request error"}',
+    '400: {"code":400,"reason":"INVALID_REQUEST_BODY","message":"invalid request error"}',
+    "401 status code (no body)",
+    "403 status code (no body)",
+    "404 status code (no body)",
+    "429 status code (no body)",
+    "500 status code (no body)",
+    "503 status code (no body)",
+    '429: {"message":"slow down","type":"rate_limit_error"}',
+  ];
+  for (const message of withoutMarker) {
+    const decoded = decodeErrorMessage(message);
+    assert.ok(decoded, message);
+    assert.ok(!decoded.includes(RETRY_MARKER), message);
+  }
+});
+
+test("bodyless failures get status-specific guidance", () => {
+  assert.match(decodeErrorMessage("401 status code (no body)") ?? "", /HTTP 401.*\/login.*\/novita/);
+  assert.match(decodeErrorMessage("403 status code (no body)") ?? "", /HTTP 403.*balance.*\/novita/);
+  assert.match(decodeErrorMessage("404 status code (no body)") ?? "", /HTTP 404.*model.*\/model/);
+  assert.match(decodeErrorMessage("429 status code (no body)") ?? "", /429/);
+  assert.match(decodeErrorMessage("502 status code (no body)") ?? "", /502/);
+  assert.equal(decodeErrorMessage("418 status code (no body)"), null);
+  assert.equal(decodeErrorMessage("400 status code (no body) trailing"), null);
+});
+
+test("trace_id is surfaced when it is not already in the message", () => {
+  assert.equal(
+    decodeErrorMessage('400: {"message":"oops","type":"x","detail":"trace_id: zz1"}'),
+    "Novita x (HTTP 400): oops (trace_id zz1)",
+  );
+  const visible = decodeErrorMessage(
+    '400: {"message":"failed trace_id=abc-1","type":"x"}',
+  );
+  assert.equal(visible, "Novita x (HTTP 400): failed trace_id=abc-1");
+});
+
 test("registered decoder changes Novita assistant errors only", () => {
   type Handler = (
     event: { message: Record<string, unknown> },
